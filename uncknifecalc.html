@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>LEoNaRd's Gold Float Combo Finder</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/decimal.js/10.4.3/decimal.min.js"></script>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#7c3aed;--muted:#94a3b8;--glass:rgba(255,255,255,0.03)}
+    *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#071127 0%, #071827 60%);color:#e6eef8}
+    .wrap{max-width:1100px;margin:28px auto;padding:28px;border-radius:16px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:0 10px 30px rgba(2,6,23,0.7)}
+    h1{margin:0 0 8px;font-size:22px}
+    p.lead{color:var(--muted);margin:0 0 18px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    .card{background:var(--card);padding:16px;border-radius:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.02)}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input[type="text"], input[type="number"], textarea, select{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:var(--glass);color:inherit;font-size:14px}
+    textarea{min-height:120px;resize:vertical}
+    .row{display:flex;gap:10px}
+    .btn{background:linear-gradient(90deg,var(--accent),#4c1d95);border:none;color:white;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600}
+    .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04)}
+    .small{font-size:13px;padding:8px 10px}
+    .results{margin-top:12px;max-height:420px;overflow:auto;padding:10px;border-radius:8px;border:1px dashed rgba(255,255,255,0.03);background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent)}
+    .combo{padding:10px;border-radius:8px;margin-bottom:8px;background:linear-gradient(180deg,rgba(255,255,255,0.015),transparent);display:flex;align-items:center;justify-content:space-between}
+    .combo .meta{font-size:13px;color:var(--muted)}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+    .expand{margin-top:8px;padding:8px;background:rgba(255,255,255,0.02);border-radius:6px;font-size:13px}
+    .footer{margin-top:16px;color:var(--muted);font-size:13px}
+    .warning{color:#ffcc00}
+    .muted{color:var(--muted)}
+    .two-col{display:flex;gap:10px}
+    .two-col > *{flex:1}
+    @media(max-width:880px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>LEoNaRd's Gold Float Combo Finder</h1>
+    <p class="lead">Preserves full precision (no rounding). This version converts per-item caps to real floats, finds combos by average real, then converts each combo's avg to the global desired (using global caps).</p>
+
+    <div class="grid">
+      <div class="card">
+        <h3>1) Caps & desired float → real needed float</h3>
+        <label>Input (this can be either a <strong>normalized desired</strong> [0..1] OR a <strong>real float</strong> like a skin float)</label>
+        <input id="desired" type="text" placeholder="e.g. 0.5 or 0.0666" value="0.5">
+
+        <div style="display:flex;gap:10px;margin-top:10px">
+          <div style="flex:1">
+            <label>Lower cap (0 - 1)</label>
+            <input id="lower" type="text" placeholder="e.g. 0.06" value="0.06">
+          </div>
+          <div style="flex:1">
+            <label>Upper cap (0 - 1)</label>
+            <input id="upper" type="text" placeholder="e.g. 0.8" value="0.8">
+          </div>
+        </div>
+
+        <div style="margin-top:12px" class="row">
+          <button id="calcReal" class="btn">Calculate</button>
+          <button id="copyReal" class="btn ghost small">Copy result</button>
+        </div>
+
+        <div class="results" id="realOut">
+          <div>Forward (avg needed → final float): <span id="realNeeded" class="mono">—</span></div>
+          <div style="margin-top:6px">Inverse (final float → avg needed): <span id="normalizedNeeded" class="mono">—</span></div>
+          <div style="margin-top:6px" class="muted">Use forward if your input is the average float from your trade-up to get the final skin’s float. Use inverse if your input is the desired final skin float and you want the normalized average needed.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>2) Load real needed float & inputs</h3>
+
+        <div class="row">
+          <button id="loadFromAbove" class="btn small">Load final float to target</button>
+          <button id="loadInverse" class="btn small">Load the needed average to target</button>
+          <input id="realManual" type="text" placeholder="or paste target avg" style="flex:1">
+        </div>
+
+        <div style="margin-top:12px">
+          <label>Comma-separated floats (0-1) or floats with caps like <code>0.0236794(0.06-0.8)</code></label>
+          <textarea id="listField" placeholder="0.123, 0.456, 0.789, or 0.0236794(0.06-0.8)"></textarea>
+        </div>
+
+        <div style="margin-top:12px">
+          <label>Or paste a copied page (marketplace skin page)</label>
+          <textarea id="pageField" placeholder="Paste page text here..."></textarea>
+          <div style="margin-top:8px" class="two-col">
+            <div style="display:flex;gap:8px">
+              <button id="extract" class="btn small">Extract floats</button>
+              <button id="clearPage" class="btn ghost small">Clear</button>
+            </div>
+            <div style="display:flex;gap:8px">
+              <input id="extractLow" type="text" placeholder="low float cap" />
+              <input id="extractHigh" type="text" placeholder="high float cap" />
+            </div>
+          </div>
+          <p class="muted" style="margin-top:8px">Extractor finds patterns like <code>Float: 0.11521334946155548</code> or standalone 0.xxx / 1.0. If you fill the float caps and press Extract, extracted values are appended as <code>float(CapLow-CapHigh)</code>.</p>
+        </div>
+      </div>
+
+      <div class="card" style="grid-column:1 / -1">
+        <h3>3) Find combinations</h3>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+          <div style="flex:1;min-width:220px">
+            <label>Target float (real) — the average we want combos to match</label>
+            <input id="realForComb" type="text" placeholder="loaded or manual">
+          </div>
+          <div style="width:200px">
+            <label>Average float deviation (absolute)</label>
+            <input id="deviation" type="text" placeholder="e.g. 0.000001" value="0.000001">
+          </div>
+          <div style="min-width:180px;display:flex;gap:8px;align-items:flex-end">
+            <button id="calcComb" class="btn">Calculate combinations</button>
+            <button id="clearResults" class="btn ghost small" id="clearResultsBtn">Clear results</button>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:12px">
+          <div style="flex:1">
+            <label>Input floats (left) — will be filled from the listField or extractor</label>
+            <textarea id="leftList" placeholder="Will be filled from the left field or extractor"></textarea>
+          </div>
+          <div style="width:360px">
+            <label>Results</label>
+            <div id="combResults" class="results"></div>
+            <p class="muted">Click a desired float to expand the 5 floats that produce it. For inputs that had caps the shown form is <code>real(shown)</code> where <code>shown</code> is the original value and <code>real</code> is the computed real value used for averages.</p>
+          </div>
+        </div>
+        <p class="footer warning" id="capWarning"></p>
+      </div>
+    </div>
+  </div>
+
+<script>
+// Decimal helper
+const D = Decimal;
+function parseDecimal(s){
+  if(typeof s !== 'string') s = String(s);
+  s = s.trim();
+  if(s === '') throw new Error('empty');
+  if(s.startsWith('.')) s = '0' + s;
+  return new D(s);
+}
+
+// UI elements
+const desiredEl = document.getElementById('desired');
+const lowerEl = document.getElementById('lower');
+const upperEl = document.getElementById('upper');
+const calcRealBtn = document.getElementById('calcReal');
+const realNeededEl = document.getElementById('realNeeded');
+const normalizedNeededEl = document.getElementById('normalizedNeeded');
+const copyRealBtn = document.getElementById('copyReal');
+
+const loadFromAboveBtn = document.getElementById('loadFromAbove');
+const loadInverseBtn = document.getElementById('loadInverse');
+const realManualEl = document.getElementById('realManual');
+const listField = document.getElementById('listField');
+const pageField = document.getElementById('pageField');
+const extractBtn = document.getElementById('extract');
+const clearPageBtn = document.getElementById('clearPage');
+const extractLow = document.getElementById('extractLow');
+const extractHigh = document.getElementById('extractHigh');
+
+const leftList = document.getElementById('leftList');
+const calcCombBtn = document.getElementById('calcComb');
+const combResults = document.getElementById('combResults');
+const realForComb = document.getElementById('realForComb');
+const deviationEl = document.getElementById('deviation');
+const clearResultsBtn = document.getElementById('clearResultsBtn');
+const capWarning = document.getElementById('capWarning');
+
+// ---------- Calculation helpers ----------
+// Forward mapping: normalized (0..1) -> real in [low,high]:
+// real = low + (high - low) * normalized
+function normalizedToReal(normalized, low, high){
+  return low.plus( high.minus(low).times(normalized) );
+}
+
+// Inverse mapping: real -> normalized (0..1):
+// normalized = (real - low) / (high - low)
+function realToNormalized(real, low, high){
+  return real.minus(low).dividedBy( high.minus(low) );
+}
+
+// ---------- Calc button (shows both forward and inverse) ----------
+calcRealBtn.addEventListener('click', ()=>{
+  try{
+    const input = parseDecimal(desiredEl.value);
+    const low = parseDecimal(lowerEl.value);
+    const high = parseDecimal(upperEl.value);
+
+    if(low.lt(0) || low.gt(1) || high.lt(0) || high.gt(1)) throw new Error('Caps must be between 0 and 1');
+    if(high.lte(low)) throw new Error('Upper cap must be greater than lower cap');
+
+    // forward: assume input is normalized desired in [0..1]
+    let forwardReal = null;
+    if(input.gte(0) && input.lte(1)){
+      forwardReal = normalizedToReal(input, low, high);
+      realNeededEl.textContent = forwardReal.toString();
+    } else {
+      realNeededEl.textContent = 'Input out of 0..1 — forward N/A';
+    }
+
+    // inverse: assume input is a real float (e.g. 0.0666) and compute normalized
+    const normalized = realToNormalized(input, low, high);
+    normalizedNeededEl.textContent = normalized.toString();
+
+  }catch(e){
+    realNeededEl.textContent = 'Error: ' + e.message;
+    normalizedNeededEl.textContent = 'Error: ' + e.message;
+  }
+});
+
+// copy button (copies the forward real if available, otherwise the normalized)
+copyRealBtn.addEventListener('click', async ()=>{
+  const a = realNeededEl.textContent;
+  const b = normalizedNeededEl.textContent;
+  const txt = (a && !a.startsWith('Error') && !a.includes('N/A')) ? a : b;
+  if(txt){
+    await navigator.clipboard.writeText(txt).catch(()=>{});
+    copyRealBtn.textContent = 'Copied!';
+    setTimeout(()=> copyRealBtn.textContent = 'Copy result',900);
+  }
+});
+
+// Load buttons: pick forward-real or inverse-normalized into the target for combo finder
+loadFromAboveBtn.addEventListener('click', ()=>{
+  const a = realNeededEl.textContent;
+  if(a && !a.startsWith('Error') && !a.includes('N/A')) realForComb.value = a;
+});
+loadInverseBtn.addEventListener('click', ()=>{
+  const b = normalizedNeededEl.textContent;
+  if(b && !b.startsWith('Error')) realForComb.value = b;
+});
+
+// ---------- Extractor: find floats in pasted page; optionally attach per-skin caps ----------
+extractBtn.addEventListener('click', ()=>{
+  const page = pageField.value || '';
+  const lowInput = extractLow.value.trim();
+  const highInput = extractHigh.value.trim();
+  const re = /(?:\bFloat[:\s]*)?(\b(?:0(?:\.\d+)?|1(?:\.0+)?))\b/gi;
+  const found = [];
+  let m;
+  while((m = re.exec(page)) !== null){
+    const num = m[1];
+    if(lowInput !== '' && highInput !== ''){
+      found.push(`${num}(${lowInput}-${highInput})`);
+    } else {
+      found.push(num);
+    }
+  }
+  if(found.length === 0){
+    alert('No floats found. Make sure the pasted page contains 0.x or Float: 0.x patterns.');
+    return;
+  }
+  const existing = listField.value.trim();
+  const combined = (existing ? existing + ', ' : '') + found.join(', ');
+  listField.value = combined;
+  leftList.value = combined;
+  alert('Extracted ' + found.length + ' floats into the list.');
+});
+clearPageBtn.addEventListener('click', ()=>{ pageField.value = ''; });
+
+// ---------- Parsing input list (supports value(low-high) or plain value) ----------
+function parseListFromText(txt){
+  if(!txt) return [];
+  const parts = txt.split(',').map(s=>s.trim()).filter(s=>s.length>0);
+  const arr = [];
+  for(const p of parts){
+    // match value(low-high)
+    const m = p.match(/^([0-9]+(?:\.[0-9]+)?)\(([^\)]+)\)$/);
+    if(m){
+      try{
+        const shown = parseDecimal(m[1]);
+        const capsParts = m[2].split('-').map(x=>x.trim());
+        if(capsParts.length !== 2) throw new Error('bad caps');
+        const capLow = parseDecimal(capsParts[0]);
+        const capHigh = parseDecimal(capsParts[1]);
+        // compute real = low + (high - low) * shown
+        const real = normalizedToReal(shown, capLow, capHigh);
+        arr.push({raw:p, real, shown, caps:[capLow, capHigh]});
+      }catch(e){ console.warn('Ignored invalid with caps', p); }
+    } else {
+      try{
+        const d = parseDecimal(p);
+        arr.push({raw:p, real:d, shown:null, caps:null});
+      }catch(e){ console.warn('Ignored invalid plain', p); }
+    }
+  }
+  return arr;
+}
+
+// n choose k for combinatorics safety check
+function nChooseK(n,k){
+  if(k>n) return 0n;
+  let res = 1n;
+  for(let i=0;i<k;i++) res = res * BigInt(n - i) / BigInt(i + 1);
+  return res;
+}
+
+// ---------- Combination finder (brute force) ----------
+calcCombBtn.addEventListener('click', ()=>{
+  combResults.innerHTML = '';
+  capWarning.textContent = '';
+  try{
+    const leftTxt = leftList.value.trim() || listField.value.trim();
+    const parsed = parseListFromText(leftTxt);
+    if(parsed.length < 5) throw new Error('Need at least 5 floats in the list');
+
+    // real target and deviation
+    let realStr = realForComb.value.trim() || realManualEl.value.trim();
+    if(!realStr) throw new Error('No real needed float provided');
+    const realTarget = parseDecimal(realStr);
+    const deviation = parseDecimal(deviationEl.value.trim() || '0');
+    if(deviation.lt(0)) throw new Error('Deviation must be non-negative');
+
+    // caps used to revert avg -> desired (for display)
+    const lower = parseDecimal(lowerEl.value);
+    const upper = parseDecimal(upperEl.value);
+    if(upper.lte(lower)) throw new Error('Upper cap must be greater than lower cap (for revert step)');
+
+    // safety cap
+    const totalComb = nChooseK(parsed.length, 5);
+    const maxCombAllowed = 500000n;
+    if(totalComb > maxCombAllowed){
+      capWarning.textContent = 'Too many combinations to enumerate: ' + totalComb.toString() + ' (> ' + maxCombAllowed.toString() + '). Reduce input count.';
+      return;
+    }
+
+    // brute force combos
+    const results = [];
+    const N = parsed.length;
+    for(let a=0;a<N-4;a++){
+      for(let b=a+1;b<N-3;b++){
+        for(let c=b+1;c<N-2;c++){
+          for(let d=c+1;d<N-1;d++){
+            for(let e=d+1;e<N;e++){
+              const comboParsed = [parsed[a], parsed[b], parsed[c], parsed[d], parsed[e]];
+              let sum = new D(0);
+              for(const item of comboParsed) sum = sum.plus(item.real);
+              const avgReal = sum.dividedBy(5); // average in real float space
+              const diff = avgReal.minus(realTarget).abs();
+              if(diff.lte(deviation)){
+                // compute desired using global caps (lower/upper from top inputs)
+                const desired = normalizedToReal(avgReal, lower, upper);
+                results.push({avgReal, comboParsed, desired, diff});
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if(results.length === 0){
+      combResults.innerHTML = '<div class="muted">No combinations found within the given deviation.</div>';
+      return;
+    }
+
+    // sort by closeness to target (diff)
+    results.sort((A,B) => A.diff.minus(B.diff).toNumber());
+
+    // Render each matching combo individually. Expand shows the raw inputs.
+    combResults.innerHTML = '';
+    for(const r of results){
+      const box = document.createElement('div'); box.className = 'combo';
+      const left = document.createElement('div');
+      left.innerHTML = `<div style="font-weight:700">Desired: <span class="mono">${r.desired.toString()}</span></div>
+                        <div class="meta">avg(real): <span class="mono">${r.avgReal.toString()}</span> &nbsp; diff: <span class="mono">${r.diff.toString()}</span></div>`;
+      const right = document.createElement('div');
+      const btn = document.createElement('button'); btn.className='btn small'; btn.textContent='Expand';
+      right.appendChild(btn);
+      box.appendChild(left); box.appendChild(right);
+      combResults.appendChild(box);
+
+      const expandDiv = document.createElement('div'); expandDiv.className='expand muted'; expandDiv.style.display='none';
+      for(const item of r.comboParsed){
+        const line = document.createElement('div');
+        if(item.caps){
+          line.innerHTML = `<div class="mono">${item.real.toString()}(${item.shown.toString()})</div>`;
+        } else {
+          line.innerHTML = `<div class="mono">${item.real.toString()}</div>`;
+        }
+        expandDiv.appendChild(line);
+      }
+      combResults.appendChild(expandDiv);
+
+      btn.addEventListener('click', ()=> {
+        expandDiv.style.display = (expandDiv.style.display === 'none') ? 'block' : 'none';
+      });
+    }
+
+    const footer = document.createElement('div'); footer.className='muted'; footer.style.marginTop='8px';
+    footer.textContent = 'Total matching combinations found: ' + results.length + '.';
+    combResults.appendChild(footer);
+
+  }catch(e){
+    combResults.innerHTML = '<div class="muted">Error: '+e.message+'</div>';
+  }
+});
+
+// Clear results
+clearResultsBtn.addEventListener('click', ()=>{ combResults.innerHTML = ''; capWarning.textContent = ''; });
+
+</script>
+</body>
+</html>
