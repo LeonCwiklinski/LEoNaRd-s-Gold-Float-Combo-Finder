@@ -323,7 +323,7 @@ calcCombBtn.addEventListener('click', ()=>{
 
     // safety cap
     const totalComb = nChooseK(parsed.length, 5);
-    const maxCombAllowed = 500000n;
+    const maxCombAllowed = 500000000n;
     if(totalComb > maxCombAllowed){
       capWarning.textContent = 'Too many combinations to enumerate: ' + totalComb.toString() + ' (> ' + maxCombAllowed.toString() + '). Reduce input count.';
       return;
@@ -405,4 +405,5 @@ clearResultsBtn.addEventListener('click', ()=>{ combResults.innerHTML = ''; capW
 
 </script>
 </body>
+
 </html>
